@@ -1,0 +1,8 @@
+{
+  "name": "evp-a3-backend", "version": "0.1.0", "private": true,
+  "scripts": {"start": "node src/server.js", "test": "node --test tests/*.test.js", "setup:local": "node scripts/create-local-config.js", "seed": "node scripts/seed-demo.js"},
+  "dependencies": {
+    "bcryptjs": "^2.4.3", "cookie-parser": "^1.4.7", "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0", "helmet": "^8.0.0", "jsonwebtoken": "^9.0.2", "pg": "^8.13.1"
+  }
+}

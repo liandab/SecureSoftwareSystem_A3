@@ -1,0 +1,81 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: evp_owner
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: evp_demo
+      EVP_APP_PASSWORD: ${EVP_APP_PASSWORD}
+      EVP_REPORT_PASSWORD: ${EVP_REPORT_PASSWORD}
+    volumes:
+      - evp_pgdata:/var/lib/postgresql/data
+      - ./backend/sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evp_owner -d evp_demo"]
+      interval: 5s
+      retries: 10
+
+  tls-setup:
+    build: ./backend
+    volumes:
+      - ./backend/secrets/tls:/tls
+    command: ["node", "scripts/create-dev-mtls.js", "/tls"]
+
+  seed:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://evp_owner:${DB_PASSWORD}@db:5432/evp_demo
+    volumes:
+      - ./backend/secrets:/app/secrets:ro
+    command: ["node", "scripts/seed-demo.js"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://evp_app:${EVP_APP_PASSWORD}@db:5432/evp_demo
+      REPORT_DATABASE_URL: postgres://evp_report_reader:${EVP_REPORT_PASSWORD}@db:5432/evp_demo
+      JWT_PRIVATE_KEY_FILE: /app/secrets/jwt_private.pem
+      JWT_PUBLIC_KEY_FILE: /app/secrets/jwt_public.pem
+      MTLS_CERT_DIR: /app/tls
+      PORT: 5000
+    volumes:
+      - ./backend/secrets/jwt_private.pem:/app/secrets/jwt_private.pem:ro
+      - ./backend/secrets/jwt_public.pem:/app/secrets/jwt_public.pem:ro
+      - ./backend/secrets/tls/server:/app/tls:ro
+    ports:
+      - "127.0.0.1:5443:5443"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      tls-setup:
+        condition: service_completed_successfully
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      - backend
+
+  backup:
+    image: postgres:15-alpine
+    environment:
+      PGHOST: db
+      PGUSER: evp_owner
+      PGPASSWORD: ${DB_PASSWORD}
+      PGDATABASE: evp_demo
+    volumes:
+      - ./backups:/backups
+      - ./backend/scripts:/scripts:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do sh /scripts/backup-once.sh; sleep 3600; done"]
+
+volumes:
+  evp_pgdata:
