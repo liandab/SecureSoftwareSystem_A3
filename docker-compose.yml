@@ -48,6 +48,7 @@ services:
       - ./backend/secrets/jwt_public.pem:/app/secrets/jwt_public.pem:ro
       - ./backend/secrets/tls/server:/app/tls:ro
     ports:
+      - "127.0.0.1:5000:5000"
       - "127.0.0.1:5443:5443"
     depends_on:
       seed:
